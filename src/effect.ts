@@ -18,7 +18,7 @@ export const onLoad = ({
   audioRef: HTMLAudioElement;
   context: AudioContext | null;
   trackSource: MediaElementAudioSourceNode | null;
-}): Effect.Effect<never, OnLoadError, OnLoadSuccess> =>
+}): Effect.Effect<OnLoadSuccess, OnLoadError, never> =>
   Effect.gen(function* (_) {
     const AudioContext =
       window.AudioContext || (window as any).webkitAudioContext || false;
@@ -68,7 +68,7 @@ export const onPlay = ({
 }: {
   audioRef: HTMLAudioElement | null;
   audioContext: AudioContext | null;
-}): Effect.Effect<never, never, void> =>
+}): Effect.Effect<void, never, never> =>
   Effect.gen(function* (_) {
     if (audioRef === null) {
       return yield* _(Effect.die("Missing audio ref" as const));
@@ -89,7 +89,7 @@ export const onPause = ({
   audioRef,
 }: {
   audioRef: HTMLAudioElement | null;
-}): Effect.Effect<never, never, void> =>
+}): Effect.Effect<void, never, never> =>
   Effect.gen(function* (_) {
     if (audioRef === null) {
       return yield* _(Effect.die("Missing audio ref" as const));
@@ -100,11 +100,33 @@ export const onPause = ({
     return yield* _(Effect.sync(() => audioRef.pause()));
   });
 
+  export const onSeek = ({
+    audioRef,
+    position,
+  }: {
+    audioRef: HTMLAudioElement | null;
+    position: number;
+  }): Effect.Effect<void, never, never> =>
+    Effect.gen(function* (_) {
+      if (audioRef === null) {
+        return yield* _(Effect.die("Missing audio ref" as const));
+      }
+  
+      yield* _(Console.log(`Seeking to position ${position}`));
+  
+      return yield* _(Effect.sync(() => {
+        audioRef.currentTime = position;
+        if (audioRef.paused) {
+          audioRef.play();
+        }
+      }));
+    });
+
 export const onRestart = ({
   audioRef,
 }: {
   audioRef: HTMLAudioElement | null;
-}): Effect.Effect<never, never, void> =>
+}): Effect.Effect<void, never, never> =>
   Effect.gen(function* (_) {
     if (audioRef === null) {
       return yield* _(Effect.die("Missing audio ref" as const));

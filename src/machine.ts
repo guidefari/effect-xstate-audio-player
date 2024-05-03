@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { assign, setup } from "xstate";
-import { onError, onLoad, onPause, onPlay, onRestart } from "./effect";
-import { Context, Events } from "./machine-types";
+import { onError, onLoad, onPause, onPlay, onRestart, onSeek } from "./effect";
+import { Context, Events } from "./types";
 
 export const machine = setup({
   types: {
@@ -33,6 +33,7 @@ export const machine = setup({
     onUpdateTime: assign((_, { updatedTime }: { updatedTime: number }) => ({
       currentTime: updatedTime,
     })),
+    onSeek: ({context: {audioRef}}) => onSeek({ audioRef, position: Number(audioRef?.currentTime) + 500 }).pipe(Effect.runSync),
   },
 }).createMachine({
   context: {
@@ -121,6 +122,12 @@ export const machine = setup({
                 }),
               },
             },
+            seek: {
+              target: "Playing",
+              actions: {
+                type: "onSeek",
+              },
+            }
           },
         },
       },

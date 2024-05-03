@@ -26,4 +26,5 @@ export type Events = MachineParams<{
   error: { readonly message: unknown };
   "init-error": { readonly message: unknown };
   time: { readonly updatedTime: number };
+  seek: { readonly position: number };
 }>;
