@@ -1,35 +1,43 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useMachine } from "@xstate/react";
+import { machine } from "./machine";
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
+  const [snapshot, send] = useMachine(machine);
   return (
-    <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <div>
+      <pre>{JSON.stringify(snapshot.value, null, 2)}</pre>
+      <audio
+        crossOrigin="anonymous"
+        // src="" // Use this to test "init-error" event
+        // src="https://campfire-mode.freecodecamp.org/donate.mp3" // Use this to test "end" event
+        src="https://audio.transistor.fm/m/shows/40155/2658917e74139f25a86a88d346d71324.mp3" // Use this to test "play"/"pause" events
+        onTimeUpdate={({ currentTarget: audioRef }) =>
+          send({ type: "time", params: { updatedTime: audioRef.currentTime } })
+        }
+        onError={({ type }) =>
+          send({ type: "init-error", params: { message: type } })
+        }
+        onLoadedData={({ currentTarget: audioRef }) =>
+          send({ type: "loading", params: { audioRef } })
+        }
+        onEnded={() => send({ type: "end" })}
+      />
 
-export default App
+      <p>{`Current time: ${snapshot.context.currentTime}`}</p>
+
+      <div>
+        {snapshot.matches({ Active: "Paused" }) && (
+          <button onClick={() => send({ type: "play" })}>Play</button>
+        )}
+
+        {snapshot.matches({ Active: "Playing" }) && (
+          <button onClick={() => send({ type: "pause" })}>Pause</button>
+        )}
+
+        {snapshot.matches("Active") && (
+          <button onClick={() => send({ type: "restart" })}>Restart</button>
+        )}
+      </div>
+    </div>
+  );
+}

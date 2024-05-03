@@ -1,195 +1,132 @@
-import { setup } from 'xstate';
+import { Effect } from "effect";
+import { assign, setup } from "xstate";
+import { onError, onLoad, onPause, onPlay, onRestart } from "./effect";
+import { Context, Events } from "./machine-types";
 
 export const machine = setup({
   types: {
-    context: {} as {
-      audioRef: string;
-      currentTime: number;
-      trackSource: string;
-      audioContext: string;
-    },
-    events: {} as
-      | { type: 'loading' }
-      | { type: 'init-error' }
-      | { type: 'error' }
-      | { type: 'loaded' }
-      | { type: 'play' }
-      | { type: 'pause' }
-      | { type: 'restart' }
-      | { type: 'end' }
-      | { type: 'time' },
+    events: {} as Events,
+    context: {} as Context,
   },
   actions: {
-    onPause: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-    onPlay: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-    onError: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-    onLoad: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-    onRestart: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-    onUpdateTime: function ({ context, event }, params) {
-      // Add your action code here
-      // ...
-    },
-  },
-  schemas: {
-    events: {
-      loading: {
-        type: 'object',
-        properties: {},
-      },
-      'init-error': {
-        type: 'object',
-        properties: {},
-      },
-      error: {
-        type: 'object',
-        properties: {},
-      },
-      loaded: {
-        type: 'object',
-        properties: {},
-      },
-      play: {
-        type: 'object',
-        properties: {},
-      },
-      pause: {
-        type: 'object',
-        properties: {},
-      },
-      restart: {
-        type: 'object',
-        properties: {},
-      },
-      end: {
-        type: 'object',
-        properties: {},
-      },
-      time: {
-        type: 'object',
-        properties: {},
-      },
-    },
-    context: {
-      audioRef: {
-        type: 'string',
-        description: '',
-      },
-      currentTime: {
-        type: 'number',
-        description: '',
-      },
-      trackSource: {
-        type: 'string',
-        description: '',
-      },
-      audioContext: {
-        type: 'string',
-        description: '',
-      },
-    },
+    onPlay: ({ context: { audioRef, audioContext } }) =>
+      onPlay({ audioContext, audioRef }).pipe(Effect.runPromise),
+    onPause: ({ context: { audioRef } }) =>
+      onPause({ audioRef }).pipe(Effect.runSync),
+    onRestart: ({ context: { audioRef } }) =>
+      onRestart({ audioRef }).pipe(Effect.runPromise),
+    onError: (_, { message }: { message: unknown }) =>
+      onError({ message }).pipe(Effect.runPromise),
+    onLoad: assign(({ self }, { audioRef }: { audioRef: HTMLAudioElement }) =>
+      onLoad({ audioRef, context: null, trackSource: null }).pipe(
+        Effect.tap(() => Effect.sync(() => self.send({ type: "loaded" }))),
+        Effect.tapError(({ message }) =>
+          Effect.sync(() => self.send({ type: "error", params: { message } }))
+        ),
+        Effect.map(({ context }) => context),
+        Effect.catchTag("OnLoadError", ({ context }) =>
+          Effect.succeed(context)
+        ),
+        Effect.runSync
+      )
+    ),
+    onUpdateTime: assign((_, { updatedTime }: { updatedTime: number }) => ({
+      currentTime: updatedTime,
+    })),
   },
 }).createMachine({
   context: {
+    audioContext: null,
+    trackSource: null,
     audioRef: null,
     currentTime: 0,
-    trackSource: null,
-    audioContext: null,
   },
-  id: 'Audio Player',
-  initial: 'Init',
+  id: "Audio Player",
+  initial: "Init",
   states: {
     Init: {
       on: {
-        'init-error': {
-          target: 'Error',
+        loading: {
+          target: "Loading",
           actions: {
-            type: 'onError',
+            type: "onLoad",
+            params: ({ event }) => ({ audioRef: event.params.audioRef }),
           },
         },
-        loading: {
-          target: 'Loading',
+        "init-error": {
+          target: "Error",
           actions: {
-            type: 'onLoad',
+            type: "onError",
+            params: ({ event }) => ({ message: event.params.message }),
+          },
+        },
+      },
+    },
+    Loading: {
+      on: {
+        loaded: {
+          target: "Active",
+        },
+        error: {
+          target: "Error",
+          actions: {
+            type: "onError",
+            params: ({ event }) => ({ message: event.params.message }),
+          },
+        },
+      },
+    },
+    Active: {
+      initial: "Paused",
+      states: {
+        Paused: {
+          entry: {
+            type: "onPause",
+          },
+          on: {
+            play: {
+              target: "Playing",
+            },
+            restart: {
+              target: "Playing",
+              actions: {
+                type: "onRestart",
+              },
+            },
+          },
+        },
+        Playing: {
+          entry: {
+            type: "onPlay",
+          },
+          on: {
+            restart: {
+              target: "Playing",
+              actions: {
+                type: "onRestart",
+              },
+            },
+            end: {
+              target: "Paused",
+            },
+            pause: {
+              target: "Paused",
+            },
+            time: {
+              target: "Playing",
+              actions: {
+                type: "onUpdateTime",
+                params: ({ event }) => ({
+                  updatedTime: event.params.updatedTime,
+                }),
+              },
+            },
           },
         },
       },
     },
     Error: {
-      type: 'final',
-    },
-    Loading: {
-      on: {
-        error: {
-          target: 'Error',
-          actions: {
-            type: 'onError',
-          },
-        },
-        loaded: {
-          target: 'Active',
-        },
-      },
-    },
-    Active: {
-      initial: 'Paused',
-      states: {
-        Paused: {
-          on: {
-            play: {
-              target: 'Playing',
-            },
-            restart: {
-              target: 'Playing',
-              actions: {
-                type: 'onRestart',
-              },
-            },
-          },
-          entry: {
-            type: 'onPause',
-          },
-        },
-        Playing: {
-          on: {
-            pause: {
-              target: 'Paused',
-            },
-            end: {
-              target: 'Paused',
-            },
-            restart: {
-              target: 'Playing',
-              actions: {
-                type: 'onRestart',
-              },
-            },
-            time: {
-              target: 'Playing',
-              actions: {
-                type: 'onUpdateTime',
-              },
-            },
-          },
-          entry: {
-            type: 'onPlay',
-          },
-        },
-      },
+      type: "final",
     },
   },
 });
